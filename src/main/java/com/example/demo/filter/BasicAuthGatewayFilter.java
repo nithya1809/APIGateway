@@ -17,12 +17,22 @@ import reactor.core.publisher.Mono;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 
+/**
+ * Global filter for basic HTTP authentication and authorization in the API Gateway.
+ * This filter intercepts requests to verify the Basic Auth header,
+ * validates user credentials by calling a user service,
+ * checks user roles and restricts access to resources accordingly.
+ */
 @Component
 public class BasicAuthGatewayFilter implements GlobalFilter, Ordered {
 
     private final WebClient webClient;
     private final PasswordEncoder passwordEncoder;
 
+    /**
+     * Default constructor initializing WebClient and BCryptPasswordEncoder.
+     * WebClient calls the user service at http://localhost:8083.
+     */
     public BasicAuthGatewayFilter() {
         this.webClient = WebClient.builder()
                 .baseUrl("http://localhost:8083")
@@ -30,6 +40,17 @@ public class BasicAuthGatewayFilter implements GlobalFilter, Ordered {
         this.passwordEncoder = new BCryptPasswordEncoder();
     }
 
+    /**
+     * Filters incoming requests to perform Basic Authentication and authorizations.
+     * - Extract and decode the Basic Auth header
+     * - Validate username and password against user service
+     * - Authorize access based on user roles and requested path
+     * - Add user info headers for downstream services
+     *
+     * @param exchange the current server exchange
+     * @param chain    the filter chain
+     * @return a Mono signaling when request processing is complete
+     */
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         String authHeader = exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
@@ -68,6 +89,7 @@ public class BasicAuthGatewayFilter implements GlobalFilter, Ordered {
 
                     boolean allowed = false;
 
+                    // Authorization rules based on roles and request path
                     if (path.startsWith("/orders") && (isUser || isAdmin)) {
                         allowed = true;
                     }
@@ -76,7 +98,7 @@ public class BasicAuthGatewayFilter implements GlobalFilter, Ordered {
                         if (isAdmin) {
                             allowed = true;
                         } else if (isUser && (path.contains("/findById") || path.contains("/displayAll")
-                        		||path.contains("/findByCategory")||path.contains("/findById")||path.contains("/findByName"))) {
+                        		|| path.contains("/findByCategory") || path.contains("/findByName"))) {
                             allowed = true;
                         }
                     }
@@ -99,6 +121,12 @@ public class BasicAuthGatewayFilter implements GlobalFilter, Ordered {
                 });
     }
 
+    /**
+     * Specifies the order of this filter.
+     * Lower values have higher precedence.
+     *
+     * @return the order value (-1)
+     */
     @Override
     public int getOrder() {
         return -1;
